@@ -1,0 +1,38 @@
+name: SDCPP Windows Vulkan RPC
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build.yml'
+      - 'build.ps1'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    env:
+      VULKAN_VERSION: 1.4.328.1
+    steps:
+      - name: Checkout build scripts
+        uses: actions/checkout@v4
+      - name: Install Vulkan SDK
+        shell: pwsh
+        run: |
+          curl.exe -fL --retry 3 -o "$env:RUNNER_TEMP/VulkanSDK-Installer.exe" "https://sdk.lunarg.com/sdk/download/$env:VULKAN_VERSION/windows/vulkansdk-windows-X64-$env:VULKAN_VERSION.exe"
+          if ($LASTEXITCODE) { throw "Vulkan download failed" }
+          $proc = Start-Process -FilePath "$env:RUNNER_TEMP/VulkanSDK-Installer.exe" -ArgumentList '--accept-licenses','--default-answer','--confirm-command','install' -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "Vulkan installation failed" }
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\$env:VULKAN_VERSION"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\$env:VULKAN_VERSION\bin"
+      - name: Activate Visual Studio
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Build and verify binaries
+        shell: pwsh
+        run: .\build.ps1
+      - name: Upload Windows binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdcpp-532d2c1-vulkan-rpc-win64
+          path: dist/
+          if-no-files-found: error
